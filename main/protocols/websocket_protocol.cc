@@ -84,6 +84,18 @@ bool WebsocketProtocol::OpenAudioChannel() {
     Settings settings("websocket", false);
     std::string url = settings.GetString("url");
     std::string token = settings.GetString("token");
+
+    // Check if there are manual overrides in "session" namespace
+    Settings session_settings("session", false);
+    std::string manual_url = session_settings.GetString("server_url");
+    if (!manual_url.empty()) {
+        url = manual_url;
+    }
+    std::string manual_token = session_settings.GetString("api_key");
+    if (!manual_token.empty()) {
+        token = manual_token;
+    }
+
     int version = settings.GetInt("version");
     if (version != 0) {
         version_ = version;
@@ -205,6 +217,16 @@ std::string WebsocketProtocol::GetHelloMessage() {
     cJSON* root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "hello");
     cJSON_AddNumberToObject(root, "version", version_);
+
+    // Add manual configuration overrides
+    Settings session_settings("session", false);
+    std::string llm_model = session_settings.GetString("llm_model");
+    if (!llm_model.empty()) cJSON_AddStringToObject(root, "llm_model", llm_model.c_str());
+    std::string tts_model = session_settings.GetString("tts_model");
+    if (!tts_model.empty()) cJSON_AddStringToObject(root, "tts_model", tts_model.c_str());
+    std::string voice = session_settings.GetString("voice");
+    if (!voice.empty()) cJSON_AddStringToObject(root, "voice", voice.c_str());
+
     cJSON* features = cJSON_CreateObject();
 #if CONFIG_USE_SERVER_AEC
     cJSON_AddBoolToObject(features, "aec", true);

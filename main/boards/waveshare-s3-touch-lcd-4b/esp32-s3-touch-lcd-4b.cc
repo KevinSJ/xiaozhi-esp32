@@ -317,7 +317,6 @@ private:
             
             if (current_level > 0) {
                 press_start_time_ms = esp_timer_get_time() / 1000;
-                ESP_LOGD(TAG, "Button pressed, start time recorded");
             } else {
                 uint64_t press_duration = (esp_timer_get_time() / 1000) - press_start_time_ms;
                 ESP_LOGI(TAG, "Button released after %llums", press_duration);

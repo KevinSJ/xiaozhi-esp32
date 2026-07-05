@@ -26,7 +26,14 @@
 #include "managers/sensor_manager.h"
 #include "managers/weather_manager.h"
 #include "managers/pomodoro_manager.h"
+
+#if __has_include("secret_config.h")
 #include "secret_config.h"
+#endif
+
+#ifndef TIMEZONE_STRING
+#define TIMEZONE_STRING "CST-8"
+#endif
 
 // 声明状态栏图标（DataUpdateTask 需要更新图标）
 LV_IMAGE_DECLARE(ui_img_wifi);
@@ -40,12 +47,6 @@ LV_IMAGE_DECLARE(ui_img_battery_charging);
 static const char *TAG = "DataUpdate";
 
 void CustomLcdDisplay::StartDataUpdateTask() {
-    // 暂时停用板载和风天气 API 配置，改为由 MCP 工具写入天气缓存
-    // WeatherManager::getInstance().setApiConfig(
-    //     WEATHER_API_KEY,
-    //     WEATHER_API_HOST
-    // );
-    
     // 栈从 16KB 下调到 8KB，给音频/MQTT 留更多 SRAM 余量
     // 优先级保持较低，避免与语音收发实时链路抢占 CPU
     xTaskCreate(DataUpdateTask, "weather_ui_update", 8192, this, 2, &update_task_handle_);

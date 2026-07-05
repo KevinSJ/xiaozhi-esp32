@@ -127,7 +127,6 @@ private:
         esp_lcd_panel_handle_t panel = nullptr;
 
         // 液晶屏控制IO初始化
-        ESP_LOGD(TAG, "Install panel IO");
         esp_lcd_panel_io_spi_config_t io_config = {};
         io_config.cs_gpio_num = DISPLAY_CS_PIN;
         io_config.dc_gpio_num = DISPLAY_DC_PIN;
@@ -139,7 +138,6 @@ private:
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI3_HOST, &io_config, &panel_io));
 
         // 初始化液晶屏驱动芯片
-        ESP_LOGD(TAG, "Install LCD driver");
         esp_lcd_panel_dev_config_t panel_config = {};
         panel_config.reset_gpio_num = DISPLAY_RST_PIN;
         panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;

@@ -312,7 +312,7 @@ private:
         // ===== 天气写入工具（由 AI 侧 MCP 查询后回写到设备）=====
         mcp_server.AddTool("self.weather.update",
             "Write weather data to the device screen cache.\n"
-            "Use this after AI gets weather from an external MCP/weather source.\n"
+            "Use this after AI gets weather from an external MCP/weather source (like wttr.in).\n"
             "Args:\n"
             "  `city`: City name (e.g. '苏州')\n"
             "  `text`: Weather text (e.g. '晴', '多云', '小雨')\n"
