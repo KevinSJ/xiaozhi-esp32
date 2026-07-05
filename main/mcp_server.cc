@@ -49,7 +49,7 @@ void McpServer::AddCommonTools() {
         [](const PropertyList& properties) -> ReturnValue {
             auto city = properties["city"].value<std::string>();
             auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
-            std::string url = "http://wttr.in/" + city + "?format=j1";
+            std::string url = "https://wttr.in/" + city + "?format=j1";
             if (!http->Open("GET", url)) {
                 throw std::runtime_error("Failed to connect to wttr.in");
             }

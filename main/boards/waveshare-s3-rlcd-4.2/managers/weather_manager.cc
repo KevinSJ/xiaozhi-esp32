@@ -123,9 +123,10 @@ bool WeatherManager::update() {
     
     ESP_LOGI(TAG, "正在通过 wttr.in 获取天气数据...");
     esp_http_client_config_t weather_config = {};
-    weather_config.url = "http://wttr.in/?format=j1";
+    weather_config.url = "https://wttr.in/?format=j1";
     weather_config.event_handler = http_event_handler;
     weather_config.timeout_ms = 15000;
+    weather_config.crt_bundle_attach = esp_crt_bundle_attach;
     esp_http_client_handle_t client = esp_http_client_init(&weather_config);
     
     esp_err_t err = esp_http_client_perform(client);
@@ -141,36 +142,31 @@ bool WeatherManager::update() {
 
         cJSON *root = cJSON_Parse(response_buffer);
         if (root) {
-            cJSON *current_condition_arr = cJSON_GetObjectItem(root, "current_condition");
-            cJSON *nearest_area_arr = cJSON_GetObjectItem(root, "nearest_area");
+            cJSON *cc_arr = cJSON_GetObjectItem(root, "current_condition");
+            cJSON *na_arr = cJSON_GetObjectItem(root, "nearest_area");
 
-            if (cJSON_IsArray(current_condition_arr) && cJSON_IsArray(nearest_area_arr)) {
-                cJSON *current_condition = cJSON_GetArrayItem(current_condition_arr, 0);
-                cJSON *nearest_area = cJSON_GetArrayItem(nearest_area_arr, 0);
+            if (cJSON_IsArray(cc_arr) && cJSON_IsArray(na_arr)) {
+                cJSON *cc = cJSON_GetArrayItem(cc_arr, 0);
+                cJSON *na = cJSON_GetArrayItem(na_arr, 0);
 
-                if (current_condition && nearest_area) {
-                    cJSON *temp_C = cJSON_GetObjectItem(current_condition, "temp_C");
-                    cJSON *weatherDesc_arr = cJSON_GetObjectItem(current_condition, "weatherDesc");
-                    cJSON *areaName_arr = cJSON_GetObjectItem(nearest_area, "areaName");
+                cJSON *temp_C = cc ? cJSON_GetObjectItem(cc, "temp_C") : NULL;
+                cJSON *desc_arr = cc ? cJSON_GetObjectItem(cc, "weatherDesc") : NULL;
+                cJSON *area_arr = na ? cJSON_GetObjectItem(na, "areaName") : NULL;
 
-                    if (cJSON_IsString(temp_C) && cJSON_IsArray(weatherDesc_arr) && cJSON_IsArray(areaName_arr)) {
-                        cJSON *weatherDesc = cJSON_GetArrayItem(weatherDesc_arr, 0);
-                        cJSON *areaName = cJSON_GetArrayItem(areaName_arr, 0);
+                if (cJSON_IsString(temp_C) && cJSON_IsArray(desc_arr) && cJSON_IsArray(area_arr)) {
+                    cJSON *desc = cJSON_GetArrayItem(desc_arr, 0);
+                    cJSON *area = cJSON_GetArrayItem(area_arr, 0);
+                    cJSON *desc_val = desc ? cJSON_GetObjectItem(desc, "value") : NULL;
+                    cJSON *area_val = area ? cJSON_GetObjectItem(area, "value") : NULL;
 
-                        if (weatherDesc && areaName) {
-                            cJSON *weatherDesc_val = cJSON_GetObjectItem(weatherDesc, "value");
-                            cJSON *areaName_val = cJSON_GetObjectItem(areaName, "value");
-
-                            if (cJSON_IsString(weatherDesc_val) && cJSON_IsString(areaName_val)) {
-                                latest_data_.temp = temp_C->valuestring;
-                                latest_data_.text = weatherDesc_val->valuestring;
-                                latest_data_.city = areaName_val->valuestring;
-                                latest_data_.valid = true;
-                                success = true;
-                                ESP_LOGI(TAG, "wttr.in 天气更新成功: %s, %s°C, %s",
-                                         latest_data_.city.c_str(), latest_data_.temp.c_str(), latest_data_.text.c_str());
-                            }
-                        }
+                    if (cJSON_IsString(desc_val) && cJSON_IsString(area_val)) {
+                        latest_data_.temp = temp_C->valuestring;
+                        latest_data_.text = desc_val->valuestring;
+                        latest_data_.city = area_val->valuestring;
+                        latest_data_.valid = true;
+                        success = true;
+                        ESP_LOGI(TAG, "wttr.in 天气更新成功: %s, %s°C, %s",
+                                 latest_data_.city.c_str(), latest_data_.temp.c_str(), latest_data_.text.c_str());
                     }
                 }
             }
