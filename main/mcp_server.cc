@@ -39,6 +39,35 @@ void McpServer::AddCommonTools() {
     auto original_tools = std::move(tools_);
     auto& board = Board::GetInstance();
 
+    AddTool("self.weather.get",
+        "Get the current weather for a city using wttr.in.\n"
+        "Args:\n"
+        "  `city`: City name (e.g. 'Beijing', 'Shanghai')\n",
+        PropertyList({
+            Property("city", kPropertyTypeString)
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto city = properties["city"].value<std::string>();
+            auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
+            std::string url = "http://wttr.in/" + city + "?format=j1";
+            if (!http->Open("GET", url)) {
+                throw std::runtime_error("Failed to connect to wttr.in");
+            }
+            if (http->GetStatusCode() != 200) {
+                std::string err = "wttr.in returned status code " + std::to_string(http->GetStatusCode());
+                http->Close();
+                throw std::runtime_error(err);
+            }
+            std::string response = http->ReadAll();
+            http->Close();
+
+            cJSON* root = cJSON_Parse(response.c_str());
+            if (root == nullptr) {
+                return response;
+            }
+            return root;
+        });
+
     // Do not add custom tools here.
     // Custom tools must be added in the board's InitializeTools function.
 
@@ -309,6 +338,53 @@ void McpServer::AddUserOnlyTools() {
 #endif // CONFIG_LV_USE_SNAPSHOT
     }
 #endif // HAVE_LVGL
+
+    // Configuration tools
+    AddUserOnlyTool("self.config.set", "Set manual configuration for the device, such as server_url, api_key, model, and voice.",
+        PropertyList({
+            Property("server_url", kPropertyTypeString, std::string("")),
+            Property("api_key", kPropertyTypeString, std::string("")),
+            Property("llm_model", kPropertyTypeString, std::string("")),
+            Property("tts_model", kPropertyTypeString, std::string("")),
+            Property("voice", kPropertyTypeString, std::string("")),
+            Property("wifi_ssid", kPropertyTypeString, std::string("")),
+            Property("wifi_password", kPropertyTypeString, std::string(""))
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            Settings settings("session", true);
+            auto server_url = properties["server_url"].value<std::string>();
+            auto api_key = properties["api_key"].value<std::string>();
+            auto llm_model = properties["llm_model"].value<std::string>();
+            auto tts_model = properties["tts_model"].value<std::string>();
+            auto voice = properties["voice"].value<std::string>();
+            if (!server_url.empty()) settings.SetString("server_url", server_url);
+            if (!api_key.empty()) settings.SetString("api_key", api_key);
+            if (!llm_model.empty()) settings.SetString("llm_model", llm_model);
+            if (!tts_model.empty()) settings.SetString("tts_model", tts_model);
+            if (!voice.empty()) settings.SetString("voice", voice);
+
+            auto wifi_ssid = properties["wifi_ssid"].value<std::string>();
+            auto wifi_password = properties["wifi_password"].value<std::string>();
+            if (!wifi_ssid.empty()) {
+                Settings wifi_settings("wifi", true);
+                wifi_settings.SetString("ssid", wifi_ssid);
+                wifi_settings.SetString("password", wifi_password);
+            }
+            return true;
+        });
+
+    AddUserOnlyTool("self.config.get", "Get current manual configuration for the device.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            Settings settings("session", false);
+            cJSON *json = cJSON_CreateObject();
+            cJSON_AddStringToObject(json, "server_url", settings.GetString("server_url").c_str());
+            cJSON_AddStringToObject(json, "api_key", settings.GetString("api_key").c_str());
+            cJSON_AddStringToObject(json, "llm_model", settings.GetString("llm_model").c_str());
+            cJSON_AddStringToObject(json, "tts_model", settings.GetString("tts_model").c_str());
+            cJSON_AddStringToObject(json, "voice", settings.GetString("voice").c_str());
+            return json;
+        });
 
     // Assets download url
     auto& assets = Assets::GetInstance();

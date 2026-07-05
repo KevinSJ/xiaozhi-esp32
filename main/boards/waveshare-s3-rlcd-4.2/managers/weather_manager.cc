@@ -112,129 +112,69 @@ static std::string pick_city_name_for_display(cJSON* first_city, const std::stri
 }
 
 bool WeatherManager::update() {
-    if (!response_buffer || api_key_.empty() || api_host_.empty()) {
-        ESP_LOGW(TAG, "天气 API 未配置或缓冲区未分配");
+    if (!response_buffer) {
+        ESP_LOGW(TAG, "天气缓冲区未分配");
         return false;
     }
 
-    // 第一步：通过和风天气 GeoAPI 进行 IP 定位
+    // 使用 wttr.in 获取天气数据
     response_len = 0;
     memset(response_buffer, 0, RESPONSE_BUFFER_SIZE);
-    char geo_url[256];
-    // 使用 auto_ip 让服务端按公网出口 IP 识别城市
-    snprintf(geo_url, sizeof(geo_url), "https://%s/geo/v2/city/lookup?location=auto_ip&key=%s",
-             api_host_.c_str(), api_key_.c_str());
-
-    ESP_LOGI(TAG, "正在进行 IP 定位...");
-    esp_http_client_config_t geo_config = {};
-    geo_config.url = geo_url;
-    geo_config.event_handler = http_event_handler;
-    geo_config.timeout_ms = 8000;
-    geo_config.crt_bundle_attach = esp_crt_bundle_attach;
     
-    esp_http_client_handle_t geo_client = esp_http_client_init(&geo_config);
-    esp_http_client_set_header(geo_client, "Host", api_host_.c_str());
-    esp_err_t geo_err = esp_http_client_perform(geo_client);
-    int geo_status = esp_http_client_get_status_code(geo_client);
-    
-    // 默认位置（苏州）
-    double lat = 31.23, lon = 120.62; 
-    std::string city_name = "苏州";
-
-    if (geo_err == ESP_OK && geo_status == 200 && response_len > 0) {
-        // geo 响应也可能是 gzip 压缩的，先尝试解压
-        const char* geo_json = NULL;
-        int geo_d_len = 0;
-        if (decompressed_buffer &&
-            decompress_gzip_safe((uint8_t*)response_buffer, response_len,
-                                 decompressed_buffer, DECOMPRESSED_BUFFER_SIZE, &geo_d_len)) {
-            geo_json = decompressed_buffer;
-            ESP_LOGI(TAG, "IP 定位响应已 gzip 解压 (%d -> %d bytes)", response_len, geo_d_len);
-        } else {
-            response_buffer[response_len] = '\0';
-            geo_json = response_buffer;
-        }
-        cJSON *root = cJSON_Parse(geo_json);
-        if (root) {
-            cJSON *code = cJSON_GetObjectItem(root, "code");
-            if (code && cJSON_IsString(code) && strcmp(code->valuestring, "200") == 0) {
-                cJSON *location_array = cJSON_GetObjectItem(root, "location");
-                if (location_array && cJSON_GetArraySize(location_array) > 0) {
-                    cJSON *first_city = cJSON_GetArrayItem(location_array, 0);
-                    cJSON *lat_item = cJSON_GetObjectItem(first_city, "lat");
-                    cJSON *lon_item = cJSON_GetObjectItem(first_city, "lon");
-                    if (lat_item && lon_item &&
-                        cJSON_IsString(lat_item) && cJSON_IsString(lon_item)) {
-                        lat = atof(lat_item->valuestring);
-                        lon = atof(lon_item->valuestring);
-                        city_name = pick_city_name_for_display(first_city, city_name);
-                        ESP_LOGI(TAG, "定位成功: %s (%.2f, %.2f)", city_name.c_str(), lat, lon);
-                    } else {
-                        ESP_LOGW(TAG, "定位响应缺少必要字段（lat/lon），使用默认城市");
-                    }
-                }
-            } else {
-                const char *api_code = (code && cJSON_IsString(code)) ? code->valuestring : "null";
-                ESP_LOGW(TAG, "IP 定位接口返回 code=%s，使用默认城市", api_code);
-            }
-            cJSON_Delete(root);
-        } else {
-            // 打印响应前 80 字节帮助诊断（可能是 HTML 网关页、乱码等）
-            ESP_LOGW(TAG, "IP 定位响应 JSON 解析失败 (len=%d, head=%.80s)，使用默认城市",
-                     response_len, geo_json);
-        }
-    } else {
-        // 打印失败细节，便于区分网络错误 / HTTP 错误 / 参数错误
-        if (response_len > 0) {
-            response_buffer[response_len] = '\0';
-            ESP_LOGW(TAG, "IP 定位请求失败 (err=%d, status=%d, body=%.120s)，使用默认城市",
-                     geo_err, geo_status, response_buffer);
-        } else {
-            ESP_LOGW(TAG, "IP 定位请求失败 (err=%d, status=%d, empty body)，使用默认城市",
-                     geo_err, geo_status);
-        }
-    }
-    esp_http_client_cleanup(geo_client);
-
-    // 第二步：获取实时天气数据
-    response_len = 0;
-    memset(response_buffer, 0, RESPONSE_BUFFER_SIZE);
-    char weather_url[512];
-    snprintf(weather_url, sizeof(weather_url), 
-             "https://%s/v7/weather/now?location=%.2f,%.2f&key=%s&lang=zh", 
-             api_host_.c_str(), lon, lat, api_key_.c_str());
-
-    ESP_LOGI(TAG, "获取天气数据...");
+    ESP_LOGI(TAG, "正在通过 wttr.in 获取天气数据...");
     esp_http_client_config_t weather_config = {};
-    weather_config.url = weather_url;
+    weather_config.url = "http://wttr.in/?format=j1";
     weather_config.event_handler = http_event_handler;
     weather_config.timeout_ms = 15000;
-    weather_config.crt_bundle_attach = esp_crt_bundle_attach;
     esp_http_client_handle_t client = esp_http_client_init(&weather_config);
-    
-    esp_http_client_set_header(client, "Host", api_host_.c_str());
-    esp_http_client_set_header(client, "User-Agent", "ESP32-Weather-Station");
-    esp_http_client_set_header(client, "Accept-Encoding", "gzip");
     
     esp_err_t err = esp_http_client_perform(client);
     int status_code = esp_http_client_get_status_code(client);
     bool success = false;
 
     if (err == ESP_OK && status_code == 200 && response_len > 0) {
-        int d_len = 0;
-        const char* final_json = NULL;
-        if (decompress_gzip_safe((uint8_t*)response_buffer, response_len, 
-                                  decompressed_buffer, DECOMPRESSED_BUFFER_SIZE, &d_len)) {
-            final_json = decompressed_buffer;
-        } else {
+        if (response_len < RESPONSE_BUFFER_SIZE) {
             response_buffer[response_len] = '\0';
-            final_json = response_buffer;
+        } else {
+            response_buffer[RESPONSE_BUFFER_SIZE - 1] = '\0';
         }
 
-        if (final_json) {
-            parseWeatherJson(final_json);
-            latest_data_.city = city_name;
-            success = latest_data_.valid;
+        cJSON *root = cJSON_Parse(response_buffer);
+        if (root) {
+            cJSON *current_condition_arr = cJSON_GetObjectItem(root, "current_condition");
+            cJSON *nearest_area_arr = cJSON_GetObjectItem(root, "nearest_area");
+
+            if (cJSON_IsArray(current_condition_arr) && cJSON_IsArray(nearest_area_arr)) {
+                cJSON *current_condition = cJSON_GetArrayItem(current_condition_arr, 0);
+                cJSON *nearest_area = cJSON_GetArrayItem(nearest_area_arr, 0);
+
+                if (current_condition && nearest_area) {
+                    cJSON *temp_C = cJSON_GetObjectItem(current_condition, "temp_C");
+                    cJSON *weatherDesc_arr = cJSON_GetObjectItem(current_condition, "weatherDesc");
+                    cJSON *areaName_arr = cJSON_GetObjectItem(nearest_area, "areaName");
+
+                    if (cJSON_IsString(temp_C) && cJSON_IsArray(weatherDesc_arr) && cJSON_IsArray(areaName_arr)) {
+                        cJSON *weatherDesc = cJSON_GetArrayItem(weatherDesc_arr, 0);
+                        cJSON *areaName = cJSON_GetArrayItem(areaName_arr, 0);
+
+                        if (weatherDesc && areaName) {
+                            cJSON *weatherDesc_val = cJSON_GetObjectItem(weatherDesc, "value");
+                            cJSON *areaName_val = cJSON_GetObjectItem(areaName, "value");
+
+                            if (cJSON_IsString(weatherDesc_val) && cJSON_IsString(areaName_val)) {
+                                latest_data_.temp = temp_C->valuestring;
+                                latest_data_.text = weatherDesc_val->valuestring;
+                                latest_data_.city = areaName_val->valuestring;
+                                latest_data_.valid = true;
+                                success = true;
+                                ESP_LOGI(TAG, "wttr.in 天气更新成功: %s, %s°C, %s",
+                                         latest_data_.city.c_str(), latest_data_.temp.c_str(), latest_data_.text.c_str());
+                            }
+                        }
+                    }
+                }
+            }
+            cJSON_Delete(root);
         }
     } else {
         ESP_LOGE(TAG, "天气请求失败 (err=%d, status=%d)", err, status_code);
