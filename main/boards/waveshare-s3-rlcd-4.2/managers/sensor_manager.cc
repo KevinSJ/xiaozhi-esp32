@@ -1,6 +1,16 @@
 #include "sensor_manager.h"
+#if __has_include("../secret_config.h")
 #include "../secret_config.h"
+#endif
 #include "esp_log.h"
+
+#ifndef TIMEZONE_STRING
+#define TIMEZONE_STRING "CST-8"
+#endif
+
+#ifndef NTP_SERVER
+#define NTP_SERVER "pool.ntp.org"
+#endif
 #include "esp_sntp.h"
 #include "esp_netif_sntp.h"
 #include <string.h>

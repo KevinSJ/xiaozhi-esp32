@@ -370,6 +370,15 @@ void McpServer::AddUserOnlyTools() {
                 wifi_settings.SetString("ssid", wifi_ssid);
                 wifi_settings.SetString("password", wifi_password);
             }
+
+            // Trigger reboot to apply settings if any critical config was set
+            if (!server_url.empty() || !wifi_ssid.empty()) {
+                auto& app = Application::GetInstance();
+                app.Schedule([&app]() {
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    app.Reboot();
+                });
+            }
             return true;
         });
 

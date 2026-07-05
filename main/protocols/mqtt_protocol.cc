@@ -75,6 +75,12 @@ bool MqttProtocol::StartMqttClient(bool report_error) {
     auto client_id = settings.GetString("client_id");
     auto username = settings.GetString("username");
     auto password = settings.GetString("password");
+
+    std::string manual_token = session_settings.GetString("api_key");
+    if (!manual_token.empty()) {
+        password = manual_token;
+    }
+
     int keepalive_interval = settings.GetInt("keepalive", 240);
     publish_topic_ = settings.GetString("publish_topic");
 
